@@ -86,6 +86,7 @@ fhKey:'',avKey:'',tdKey:'',
 isDark:false,track:'PLTR',cLocs:[],selA:null,rng:'1M',editId:null,mTp:null,lastChart:null,
 _fxStart:null,_fxEnd:null};
 var hCache={},useLS=false;
+var apiSt={fh:{ok:null,last:null,calls:0},td:{ok:null,last:null,calls:0},av:{ok:null,last:null,calls:0},cg:{ok:null,last:null,calls:0},fx:{ok:null,last:null,calls:0}};
 var SK='vault-portfolio-data',SNAP_KEY='vault-price-snapshots';
 var snapshots=[];
 var LOCS=['Discount Bank','IBKR','Wise','Metamask','Coinbase','Shareworks'];
@@ -131,9 +132,9 @@ function takeSnap(){if(!S.prices||!Object.keys(S.prices).length)return;var td=da
 function getLocalHist(sym){var k=sym.toUpperCase(),pts=[];for(var i=0;i<snapshots.length;i++){var s=snapshots[i];if(s.prices&&s.prices[k])pts.push({time:new Date(s.date).getTime(),price:s.prices[k]})}return pts.length>1?pts:null}
 
 /* ============ API: LIVE QUOTES (Finnhub only) ============ */
-async function fetchFH(sym){if(!S.fhKey)return null;try{var r=await fetch('https://finnhub.io/api/v1/quote?symbol='+encodeURIComponent(sym)+'&token='+S.fhKey);if(!r.ok)return null;var d=await r.json();if(d&&typeof d.c==='number'&&d.c>0)return{price:d.c,pc:d.pc||d.c,src:'FH'}}catch(e){}return null}
-async function fetchCG(sym){var id=CG[sym.toUpperCase()]||sym.toLowerCase();try{var r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids='+id+'&vs_currencies=usd&include_24hr_change=true');if(!r.ok)return null;var d=await r.json();if(d[id]&&d[id].usd)return{price:d[id].usd,ch24:d[id].usd_24h_change||0,src:'CG'}}catch(e){}return null}
-async function fetchXR(){for(var u of['https://api.exchangerate-api.com/v4/latest/USD','https://open.er-api.com/v6/latest/USD']){try{var r=await fetch(u);if(!r.ok)continue;var d=await r.json();if(d.rates){S.xR={USD:1,ILS:d.rates.ILS||3.6,EUR:d.rates.EUR||.92,GBP:d.rates.GBP||.79};return}}catch(e){}}}
+async function fetchFH(sym){if(!S.fhKey)return null;try{var r=await fetch('https://finnhub.io/api/v1/quote?symbol='+encodeURIComponent(sym)+'&token='+S.fhKey);apiSt.fh.calls++;apiSt.fh.last=Date.now();if(!r.ok){apiSt.fh.ok=false;return null}var d=await r.json();if(d&&typeof d.c==='number'&&d.c>0){apiSt.fh.ok=true;return{price:d.c,pc:d.pc||d.c,src:'FH'}}}catch(e){apiSt.fh.ok=false}return null}
+async function fetchCG(sym){var id=CG[sym.toUpperCase()]||sym.toLowerCase();try{var r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids='+id+'&vs_currencies=usd&include_24hr_change=true');apiSt.cg.calls++;apiSt.cg.last=Date.now();if(!r.ok){apiSt.cg.ok=false;return null}var d=await r.json();if(d[id]&&d[id].usd){apiSt.cg.ok=true;return{price:d[id].usd,ch24:d[id].usd_24h_change||0,src:'CG'}}}catch(e){apiSt.cg.ok=false}return null}
+async function fetchXR(){for(var u of['https://api.exchangerate-api.com/v4/latest/USD','https://open.er-api.com/v6/latest/USD']){try{var r=await fetch(u);apiSt.fx.calls++;apiSt.fx.last=Date.now();if(!r.ok)continue;var d=await r.json();if(d.rates){S.xR={USD:1,ILS:d.rates.ILS||3.6,EUR:d.rates.EUR||.92,GBP:d.rates.GBP||.79};apiSt.fx.ok=true;return}}catch(e){}}apiSt.fx.ok=false}
 async function fetchFxHist(days){if(S.dC==='USD')return;var end=new Date(),start=new Date(end.getTime()-days*864e5);try{var r=await fetch('https://api.frankfurter.dev/v1/'+dateStr(start)+'..'+dateStr(end)+'?base=USD&symbols='+S.dC);if(!r.ok)return;var d=await r.json();if(d.rates){S.fxHist=d.rates;var dates=Object.keys(d.rates).sort();if(dates.length>=2){S._fxStart={date:dates[0],rate:d.rates[dates[0]][S.dC]||S.xR[S.dC]};S._fxEnd={date:dates[dates.length-1],rate:d.rates[dates[dates.length-1]][S.dC]||S.xR[S.dC]}}}}catch(e){}}
 async function fetchName(sym){if(!S.fhKey||!sym)return'';try{var r=await fetch('https://finnhub.io/api/v1/stock/profile2?symbol='+encodeURIComponent(sym)+'&token='+S.fhKey);if(r.ok){var d=await r.json();if(d&&d.name)return d.name}}catch(e){}return''}
 
@@ -142,30 +143,33 @@ async function fetchTD(sym){
   if(!S.tdKey)return null;
   try{
     var r=await fetch('https://api.twelvedata.com/time_series?symbol='+encodeURIComponent(sym)+'&interval=1day&outputsize=365&apikey='+S.tdKey);
-    if(!r.ok)return null;
+    apiSt.td.calls++;apiSt.td.last=Date.now();
+    if(!r.ok){apiSt.td.ok=false;return null}
     var d=await r.json();
-    if(d.status==='error')return null;
+    if(d.status==='error'){apiSt.td.ok=false;return null}
     if(d.values&&d.values.length>1){
+      apiSt.td.ok=true;
       return d.values.map(function(v){return{time:new Date(v.datetime).getTime(),price:parseFloat(v.close)}}).reverse();
     }
-  }catch(e){}return null;
+  }catch(e){apiSt.td.ok=false}return null;
 }
 async function fetchAV(sym){
   if(!S.avKey)return null;
   try{
     var r=await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol='+encodeURIComponent(sym)+'&outputsize=compact&apikey='+S.avKey);
-    if(!r.ok)return null;var d=await r.json();
-    if(d.Note||d.Information)return null;
-    var ts=d['Time Series (Daily)'];if(!ts)return null;
+    apiSt.av.calls++;apiSt.av.last=Date.now();
+    if(!r.ok){apiSt.av.ok=false;return null}var d=await r.json();
+    if(d.Note||d.Information){apiSt.av.ok=false;return null}
+    var ts=d['Time Series (Daily)'];if(!ts){apiSt.av.ok=false;return null}
     var pts=[],ks=Object.keys(ts).sort();
     for(var i=0;i<ks.length;i++)pts.push({time:new Date(ks[i]).getTime(),price:parseFloat(ts[ks[i]]['4. close'])});
-    return pts.length>1?pts:null;
-  }catch(e){}return null;
+    apiSt.av.ok=true;return pts.length>1?pts:null;
+  }catch(e){apiSt.av.ok=false}return null;
 }
 async function fetchCryptoHist(sym,rng){
   var id=CG[sym.toUpperCase()]||sym.toLowerCase();
-  var dm={'1H':'1','4H':'1','1D':'1','1W':'7','1M':'30','6M':'180','1Y':'365'};
-  try{var r=await fetch('https://api.coingecko.com/api/v3/coins/'+id+'/market_chart?vs_currency=usd&days='+(dm[rng]||'1'));if(!r.ok)return null;var d=await r.json();if(d.prices&&d.prices.length>1)return d.prices.map(function(p){return{time:p[0],price:p[1]}})}catch(e){}return null;
+  var dm={'1W':'7','1M':'30','3M':'90','6M':'180','1Y':'365'};
+  try{var r=await fetch('https://api.coingecko.com/api/v3/coins/'+id+'/market_chart?vs_currency=usd&days='+(dm[rng]||'30'));apiSt.cg.calls++;apiSt.cg.last=Date.now();if(!r.ok){apiSt.cg.ok=false;return null}var d=await r.json();if(d.prices&&d.prices.length>1){apiSt.cg.ok=true;return d.prices.map(function(p){return{time:p[0],price:p[1]}})}}catch(e){apiSt.cg.ok=false}return null;
 }
 
 /* fetchStockHist: Local snapshots -> Twelve Data -> Alpha Vantage -> 2-point quote fallback */
@@ -322,7 +326,59 @@ function renderManage(){
 function renderSettings(){
   var byTk={};S.P.forEach(function(a){if(a.symbol)byTk[a.symbol.toUpperCase()]=true});var tks=Object.keys(byTk).sort();
   var locH=S.cLocs.length?'<div style="margin-top:8px;font-size:12px;color:var(--tx3)">Custom: '+S.cLocs.map(function(l,i){return l+' <a style="color:var(--red);cursor:pointer;font-size:10px" onclick="rmLoc('+i+')">×</a>'}).join(' · ')+'</div>':'';
+  // API status helper
+  function stDot(st){if(st.ok===true)return'<span style="color:var(--grn)">● Connected</span>';if(st.ok===false)return'<span style="color:var(--red)">● Error</span>';return'<span style="color:var(--tx3)">○ Not tested</span>'}
+  function stCalls(st){if(!st.calls)return'';var ago=st.last?Math.round((Date.now()-st.last)/1000):0;var agoTxt=ago<60?ago+'s ago':Math.round(ago/60)+'m ago';return'<span style="font-size:10px;color:var(--tx3);margin-left:8px">'+st.calls+' calls · last '+agoTxt+'</span>'}
+  // Snapshot coverage info
+  function snapCoverage(){
+    if(!snapshots.length)return{total:0,earliest:null,latest:null,perSym:{}};
+    var syms={};S.P.forEach(function(a){if(a.symbol&&(a.type==='stock'||a.type==='option'||a.type==='crypto'))syms[a.symbol.toUpperCase()]=true});
+    var symList=Object.keys(syms);if(!symList.length)return{total:snapshots.length,earliest:snapshots[0].date,latest:snapshots[snapshots.length-1].date,perSym:{}};
+    var perSym={};
+    for(var i=0;i<symList.length;i++){
+      var sym=symList[i],first=null,last=null,cnt=0;
+      for(var j=0;j<snapshots.length;j++){
+        if(snapshots[j].prices&&snapshots[j].prices[sym]){
+          if(!first)first=snapshots[j].date;
+          last=snapshots[j].date;cnt++;
+        }
+      }
+      perSym[sym]={first:first,last:last,days:cnt};
+    }
+    return{total:snapshots.length,earliest:snapshots[0].date,latest:snapshots[snapshots.length-1].date,perSym:perSym};
+  }
+  var cov=snapCoverage();
+  var covH='<div class="sg"><div class="sgT">Historical Data Coverage</div>';
+  if(!cov.total||!Object.keys(cov.perSym).length){
+    covH+='<div style="font-size:12px;color:var(--tx3);padding:12px 0">No history loaded yet. Add API keys and assets to start building history.</div>';
+  }else{
+    covH+='<div style="font-size:12px;color:var(--tx2);margin-bottom:12px">'+cov.total+' snapshot days · '+cov.earliest+' → '+cov.latest+'</div>';
+    covH+='<div style="display:flex;flex-direction:column;gap:4px">';
+    var symKeys=Object.keys(cov.perSym).sort();
+    for(var si=0;si<symKeys.length;si++){
+      var sk=symKeys[si],sd=cov.perSym[sk];
+      var barW=sd.days>0?Math.max(4,Math.min(100,Math.round((sd.days/365)*100))):0;
+      var stCol=sd.days>=180?'var(--grn)':sd.days>=30?'var(--acc)':'var(--red)';
+      covH+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--brdL)"><div style="width:60px;font-size:12px;font-weight:500;color:var(--txt);flex-shrink:0">'+sk+'</div><div style="flex:1;height:6px;background:var(--brdL);border-radius:3px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:'+stCol+';border-radius:3px"></div></div><div style="font-size:10px;color:var(--tx3);width:120px;text-align:right;flex-shrink:0">'+(sd.first?sd.days+'d · '+sd.first:'No data')+'</div></div>';
+    }
+    covH+='</div>';
+  }
+  covH+='<div style="text-align:center;margin-top:12px"><button id="refetchHist" style="background:none;border:1px solid var(--ac2);color:var(--acc);font-size:11px;padding:8px 20px;border-radius:4px;cursor:pointer;letter-spacing:1px">Refresh Prices & Fill History</button></div>';
+  covH+='</div>';
+
+  var apiDash='<div class="sg"><div class="sgT">API Status</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+    '<div style="background:var(--card);border:1px solid var(--brdL);border-radius:6px;padding:12px"><div style="font-size:11px;font-weight:500;color:var(--txt);margin-bottom:4px">Finnhub</div><div style="font-size:10px;color:var(--tx3);margin-bottom:6px">Live quotes</div><div style="font-size:11px">'+stDot(apiSt.fh)+'</div>'+stCalls(apiSt.fh)+'<div style="font-size:9px;color:var(--tx3);margin-top:4px">60 calls/min</div></div>'+
+    '<div style="background:var(--card);border:1px solid var(--brdL);border-radius:6px;padding:12px"><div style="font-size:11px;font-weight:500;color:var(--txt);margin-bottom:4px">Twelve Data</div><div style="font-size:10px;color:var(--tx3);margin-bottom:6px">Chart history</div><div style="font-size:11px">'+stDot(apiSt.td)+'</div>'+stCalls(apiSt.td)+'<div style="font-size:9px;color:var(--tx3);margin-top:4px">800 calls/day · 8/min</div></div>'+
+    '<div style="background:var(--card);border:1px solid var(--brdL);border-radius:6px;padding:12px"><div style="font-size:11px;font-weight:500;color:var(--txt);margin-bottom:4px">Alpha Vantage</div><div style="font-size:10px;color:var(--tx3);margin-bottom:6px">History fallback</div><div style="font-size:11px">'+stDot(apiSt.av)+'</div>'+stCalls(apiSt.av)+'<div style="font-size:9px;color:var(--tx3);margin-top:4px">25 calls/day</div></div>'+
+    '<div style="background:var(--card);border:1px solid var(--brdL);border-radius:6px;padding:12px"><div style="font-size:11px;font-weight:500;color:var(--txt);margin-bottom:4px">CoinGecko</div><div style="font-size:10px;color:var(--tx3);margin-bottom:6px">Crypto prices + history</div><div style="font-size:11px">'+stDot(apiSt.cg)+'</div>'+stCalls(apiSt.cg)+'<div style="font-size:9px;color:var(--tx3);margin-top:4px">~30 calls/min · No key</div></div>'+
+    '</div>'+
+    '<div style="background:var(--card);border:1px solid var(--brdL);border-radius:6px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center"><div><span style="font-size:11px;font-weight:500;color:var(--txt)">FX Rates</span> <span style="font-size:10px;color:var(--tx3)">(Frankfurter)</span></div><div style="font-size:11px">'+stDot(apiSt.fx)+'</div></div>'+
+    '<div style="text-align:center;margin-top:12px"><button id="apiTest" style="background:none;border:1px solid var(--ac2);color:var(--acc);font-size:11px;padding:8px 20px;border-radius:4px;cursor:pointer;letter-spacing:1px">Test All Sources</button></div></div>';
+
   $('pg-settings').innerHTML='<div style="text-align:center;margin-bottom:32px"><div class="brand">Vault · Settings</div></div>'+
+  apiDash+
+  covH+
   '<div class="sg"><div class="sgT">Appearance</div><div class="sgR"><div><div class="sgLb">Dark Mode</div></div><button class="tgl'+(S.isDark?' on':'')+'" id="dkT"></button></div><div class="sgR"><div><div class="sgLb">Currency</div></div><div class="cTog" id="cTog2">'+['USD','ILS','EUR','GBP'].map(function(c){return'<button data-c="'+c+'"'+(c===S.dC?' class="act"':'')+'>'+c+'</button>'}).join('')+'</div></div></div>'+
   '<div class="sg"><div class="sgT">Portfolio</div><div class="sgR"><div><div class="sgLb">Track Concentration</div><div class="sgDs">Shown on overview</div></div><div class="sgI"><select id="trackSel" style="width:120px">'+tks.map(function(t){return'<option value="'+t+'"'+(t===S.track?' selected':'')+'>'+t+'</option>'}).join('')+'</select></div></div></div>'+
   '<div class="sg"><div class="sgT">API Keys</div>'+
@@ -330,6 +386,7 @@ function renderSettings(){
   '<div class="sgR" style="flex-direction:column;align-items:flex-start;gap:10px"><div><div class="sgLb">Twelve Data</div><div class="sgDs">Chart history (800/day) · <a href="https://twelvedata.com/pricing" target="_blank" style="color:var(--acc)">Get key</a></div></div><div class="sgI" style="width:100%"><input id="tdIn" value="'+S.tdKey+'"><button id="tdSv">Save</button></div></div>'+
   '<div class="sgR" style="flex-direction:column;align-items:flex-start;gap:10px"><div><div class="sgLb">Alpha Vantage</div><div class="sgDs">History fallback (25/day) · <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:var(--acc)">Get key</a></div></div><div class="sgI" style="width:100%"><input id="avIn" value="'+S.avKey+'"><button id="avSv">Save</button></div></div></div>'+
   '<div class="sg"><div class="sgT">Locations</div><div class="sgR" style="flex-direction:column;align-items:flex-start;gap:10px"><div class="sgI" style="width:100%"><input id="locIn" placeholder="Add custom location"><button id="locSv">Add</button></div>'+locH+'</div></div>';
+
   $('dkT').onclick=function(){S.isDark=!S.isDark;applyTheme();save()};
   $('cTog2').onclick=function(e){if(e.target.tagName==='BUTTON'){S.dC=e.target.dataset.c;save();renderAll();loadChart()}};
   if($('trackSel'))$('trackSel').onchange=function(){S.track=this.value;save();renderOverview()};
@@ -337,6 +394,30 @@ function renderSettings(){
   $('tdSv').onclick=function(){S.tdKey=$('tdIn').value.trim();hCache={};save();toast('Saved');if(S.P.length){bootstrapHistory().then(function(){loadChart()})}};
   $('avSv').onclick=function(){S.avKey=$('avIn').value.trim();hCache={};save();toast('Saved')};
   $('locSv').onclick=function(){var v=$('locIn').value.trim();if(v&&S.cLocs.indexOf(v)<0){S.cLocs.push(v);save();renderSettings();toast('Added')}};
+  $('apiTest').onclick=async function(){
+    toast('Testing sources…');
+    // Test Finnhub
+    if(S.fhKey){try{var r=await fetch('https://finnhub.io/api/v1/quote?symbol=AAPL&token='+S.fhKey);apiSt.fh.calls++;apiSt.fh.last=Date.now();apiSt.fh.ok=r.ok&&(await r.json()).c>0}catch(e){apiSt.fh.ok=false}}else{apiSt.fh.ok=null}
+    // Test Twelve Data
+    if(S.tdKey){try{var r2=await fetch('https://api.twelvedata.com/time_series?symbol=AAPL&interval=1day&outputsize=1&apikey='+S.tdKey);apiSt.td.calls++;apiSt.td.last=Date.now();var d2=await r2.json();apiSt.td.ok=r2.ok&&d2.values&&d2.values.length>0}catch(e){apiSt.td.ok=false}}else{apiSt.td.ok=null}
+    // Test Alpha Vantage
+    if(S.avKey){try{var r3=await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=AAPL&outputsize=compact&apikey='+S.avKey);apiSt.av.calls++;apiSt.av.last=Date.now();var d3=await r3.json();apiSt.av.ok=!d3.Note&&!d3.Information&&!!d3['Time Series (Daily)']}catch(e){apiSt.av.ok=false}}else{apiSt.av.ok=null}
+    // Test CoinGecko
+    try{var r4=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');apiSt.cg.calls++;apiSt.cg.last=Date.now();var d4=await r4.json();apiSt.cg.ok=!!d4.bitcoin}catch(e){apiSt.cg.ok=false}
+    // Test FX
+    try{var r5=await fetch('https://api.exchangerate-api.com/v4/latest/USD');apiSt.fx.calls++;apiSt.fx.last=Date.now();apiSt.fx.ok=r5.ok}catch(e){apiSt.fx.ok=false}
+    renderSettings();toast('Tests complete');
+  };
+  $('refetchHist').onclick=async function(){
+    this.disabled=true;this.textContent='Running…';
+    await refreshPrices();
+    renderAll();
+    hCache={};
+    await bootstrapHistory();
+    await loadChart();
+    renderSettings();
+    toast('Refresh complete');
+  };
 }
 window.rmLoc=function(i){S.cLocs.splice(i,1);save();renderSettings()};
 function applyTheme(){document.documentElement.classList.toggle('light',!S.isDark)}
