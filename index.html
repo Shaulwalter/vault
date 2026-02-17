@@ -83,7 +83,7 @@
 /* ============ STATE ============ */
 var S={P:[],prices:{},xR:{USD:1,ILS:3.6,EUR:.92,GBP:.79},fxHist:{},dC:'USD',
 fhKey:'',avKey:'',tdKey:'',
-isDark:false,track:'PLTR',cLocs:[],selA:null,rng:'1D',editId:null,mTp:null,lastChart:null,
+isDark:false,track:'PLTR',cLocs:[],selA:null,rng:'1M',editId:null,mTp:null,lastChart:null,
 _fxStart:null,_fxEnd:null};
 var hCache={},useLS=false;
 var SK='vault-portfolio-data',SNAP_KEY='vault-price-snapshots';
@@ -92,9 +92,9 @@ var LOCS=['Discount Bank','IBKR','Wise','Metamask','Coinbase','Shareworks'];
 var ETFS='SPY,QQQ,VOO,VTI,IVV,SCHD,VEA,VWO,VTV,VUG,BND,AGG,IEMG,VIG,VXUS,IWM,IWF,IWD,VGT,XLF,XLE,XLV,XLK,XLI,XLU,XLP,XLRE,XLC,XLY,XLB,VNQ,ARKK,ARKG,ARKW,ARKF,ARKQ,SOXL,TQQQ,SQQQ,SPXL,TLT,HYG,LQD,EMB,GLD,SLV,USO,DIA,MDY,IJR,IEFA,EFA,EEM'.split(',');
 var CG={BTC:'bitcoin',ETH:'ethereum',SOL:'solana',ADA:'cardano',DOT:'polkadot',AVAX:'avalanche-2',LINK:'chainlink',XRP:'ripple',DOGE:'dogecoin',LTC:'litecoin',UNI:'uniswap',ATOM:'cosmos',NEAR:'near',APT:'aptos',ARB:'arbitrum',OP:'optimism',SUI:'sui',BNB:'binancecoin',TON:'the-open-network',PEPE:'pepe',AAVE:'aave',MKR:'maker',TIA:'celestia',STX:'blockstack',SHIB:'shiba-inu',CRO:'crypto-com-chain',MATIC:'matic-network',RENDER:'render-token',INJ:'injective-protocol',SEI:'sei-network',FET:'fetch-ai',WIF:'dogwifcoin',JUP:'jupiter-exchange-solana',PYTH:'pyth-network',HBAR:'hedera-hashgraph',FIL:'filecoin',ALGO:'algorand',VET:'vechain',SAND:'the-sandbox',MANA:'decentraland',AXS:'axie-infinity',ENJ:'enjincoin',GRT:'the-graph',COMP:'compound-governance-token',SNX:'havven',ASTR:'astar',IMX:'immutable-x',APE:'apecoin',LDO:'lido-dao',RNDR:'render-token',POL:'matic-network'};
 var BCOL={etf:'#d4b88c',stocks:'#8db87a',deposits:'#b8a07a',crypto:'#7ab8b8',cash:'#a07ab8'};
-var RNGL={'1H':'1h','4H':'4h','1D':'today','1W':'1w','1M':'1m','6M':'6m','1Y':'1y'};
-var RNGMS={'1H':36e5,'4H':144e5,'1D':864e5,'1W':6048e5,'1M':2592e6,'6M':15552e6,'1Y':31536e6};
-var RNGDAYS={'1H':1,'4H':1,'1D':1,'1W':7,'1M':30,'6M':180,'1Y':365};
+var RNGL={'1W':'1w','1M':'1m','3M':'3m','6M':'6m','1Y':'1y'};
+var RNGMS={'1W':6048e5,'1M':2592e6,'3M':7776e6,'6M':15552e6,'1Y':31536e6};
+var RNGDAYS={'1W':7,'1M':30,'3M':90,'6M':180,'1Y':365};
 
 /* ============ UTIL ============ */
 var $=function(id){return document.getElementById(id)};
@@ -260,9 +260,13 @@ function renderOverview(){
   var t=totals();
   var byTk={},tkN={};S.P.forEach(function(a){var c=calc(a);if(a.symbol){var k=a.symbol.toUpperCase();byTk[k]=(byTk[k]||0)+c.n;if(a.displayName&&!tkN[k])tkN[k]=a.displayName}});
   var concH='';if(S.track&&byTk[S.track]!==undefined&&t.n>0){var cP=(byTk[S.track]/t.n)*100;concH='<div class="concL">'+S.track+(tkN[S.track]?' ('+tkN[S.track]+')':'')+': <strong>'+cP.toFixed(1)+'%</strong> of portfolio</div>'}
-  $('pg-overview').innerHTML='<div style="text-align:center;margin-bottom:40px"><div class="brand">Vault</div><div class="bigV">'+fmt(t.n)+'</div><div class="bigC fl" id="bigC"></div><div class="fxL" id="fxL"></div>'+concH+'<div class="lbl">Total Net Value</div><div class="sRow"><div class="sI"><div class="l">Gross</div><div class="v vG">'+fmt(t.g,true)+'</div></div><div class="sI"><div class="l">Tax</div><div class="v vT">-'+fmt(t.t,true)+'</div></div><div class="sI"><div class="l">Net</div><div class="v vN">'+fmt(t.n,true)+'</div></div></div><div class="cTog" id="cTog1">'+['USD','ILS','EUR','GBP'].map(function(c){return'<button data-c="'+c+'"'+(c===S.dC?' class="act"':'')+'>'+c+'</button>'}).join('')+'</div></div><div class="chBox"><div class="chHd"><div><div class="chT" id="chT">Portfolio</div><div class="chD" id="chD"></div></div><div class="rng" id="rngT">'+['1H','4H','1D','1W','1M','6M','1Y'].map(function(r){return'<button data-r="'+r+'"'+(r===S.rng?' class="act"':'')+'>'+r+'</button>'}).join('')+'</div></div><div class="chA" id="chA"><div class="cMsg">Loading…</div></div></div><div id="insS"></div>';
+  // Build asset selector options
+  var aOpts='<option value="">Portfolio (All)</option>';
+  var seen={};S.P.forEach(function(a){if(a.symbol&&!seen[a.symbol.toUpperCase()]){seen[a.symbol.toUpperCase()]=true;aOpts+='<option value="'+a.id+'"'+(S.selA===a.id?' selected':'')+'>'+(a.displayName?a.symbol+' — '+a.displayName:a.symbol)+'</option>'}});
+  $('pg-overview').innerHTML='<div style="text-align:center;margin-bottom:40px"><div class="brand">Vault</div><div class="bigV">'+fmt(t.n)+'</div><div class="bigC fl" id="bigC"></div><div class="fxL" id="fxL"></div>'+concH+'<div class="lbl">Total Net Value</div><div class="sRow"><div class="sI"><div class="l">Gross</div><div class="v vG">'+fmt(t.g,true)+'</div></div><div class="sI"><div class="l">Tax</div><div class="v vT">-'+fmt(t.t,true)+'</div></div><div class="sI"><div class="l">Net</div><div class="v vN">'+fmt(t.n,true)+'</div></div></div><div class="cTog" id="cTog1">'+['USD','ILS','EUR','GBP'].map(function(c){return'<button data-c="'+c+'"'+(c===S.dC?' class="act"':'')+'>'+c+'</button>'}).join('')+'</div></div><div class="chBox"><div class="chHd"><div><div class="chT" id="chT">Portfolio</div><div class="chD" id="chD"></div></div><div class="rng" id="rngT">'+['1W','1M','3M','6M','1Y'].map(function(r){return'<button data-r="'+r+'"'+(r===S.rng?' class="act"':'')+'>'+r+'</button>'}).join('')+'</div></div><div style="margin-bottom:12px"><select id="chSel" style="background:var(--inp);border:1px solid var(--brd);color:var(--txt);font-family:var(--san);font-size:12px;padding:6px 10px;border-radius:4px;outline:none;width:100%;cursor:pointer">'+aOpts+'</select></div><div class="chA" id="chA"><div class="cMsg">Loading…</div></div></div><div id="insS"></div>';
   $('cTog1').onclick=function(e){if(e.target.tagName==='BUTTON'){S.dC=e.target.dataset.c;save();renderAll();loadChart()}};
   $('rngT').onclick=function(e){if(e.target.tagName==='BUTTON'){S.rng=e.target.dataset.r;document.querySelectorAll('#rngT button').forEach(function(b){b.classList.toggle('act',b.dataset.r===S.rng)});loadChart()}};
+  $('chSel').onchange=function(){var v=this.value;S.selA=v||null;loadChart()};
   renderInsights();
 }
 function renderInsights(){
@@ -389,9 +393,9 @@ function drawChart(data){
   var ps=data.map(function(d){return d.price}),mn=Math.min.apply(null,ps),mx=Math.max.apply(null,ps),pT=10,pB=24,cH=H-pT-pB,rr=mx-mn||1;
   var xP=function(i){return(i/(data.length-1))*W},yP=function(v){return pT+cH-(((v-mn)/rr)*cH)};
   var isUp=ps[ps.length-1]>=ps[0],lnC=isUp?'#8db87a':'#c48080',flC=isUp?'rgba(141,184,122,.08)':'rgba(196,128,128,.08)',lblC=S.isDark?'#8a7d6e':'#7a7268';
-  function drawBase(){ctx.clearRect(0,0,W,H);ctx.beginPath();ctx.moveTo(xP(0),yP(ps[0]));for(var i=1;i<ps.length;i++)ctx.lineTo(xP(i),yP(ps[i]));ctx.lineTo(xP(ps.length-1),H);ctx.lineTo(xP(0),H);ctx.closePath();ctx.fillStyle=flC;ctx.fill();ctx.beginPath();ctx.moveTo(xP(0),yP(ps[0]));for(var i=1;i<ps.length;i++)ctx.lineTo(xP(i),yP(ps[i]));ctx.strokeStyle=lnC;ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle=lblC;ctx.font='10px Inter,sans-serif';ctx.textAlign='center';for(var j=0;j<5;j++){var idx=Math.round((j/4)*(data.length-1));var d=new Date(data[idx].time);var lb;if(S.rng==='1H'||S.rng==='4H'||S.rng==='1D')lb=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');else if(S.rng==='1W'||S.rng==='1M')lb=(d.getMonth()+1)+'/'+d.getDate();else lb=(d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2);ctx.fillText(lb,xP(idx),H-4)}}
+  function drawBase(){ctx.clearRect(0,0,W,H);ctx.beginPath();ctx.moveTo(xP(0),yP(ps[0]));for(var i=1;i<ps.length;i++)ctx.lineTo(xP(i),yP(ps[i]));ctx.lineTo(xP(ps.length-1),H);ctx.lineTo(xP(0),H);ctx.closePath();ctx.fillStyle=flC;ctx.fill();ctx.beginPath();ctx.moveTo(xP(0),yP(ps[0]));for(var i=1;i<ps.length;i++)ctx.lineTo(xP(i),yP(ps[i]));ctx.strokeStyle=lnC;ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle=lblC;ctx.font='10px Inter,sans-serif';ctx.textAlign='center';for(var j=0;j<5;j++){var idx=Math.round((j/4)*(data.length-1));var d=new Date(data[idx].time);var lb;if(S.rng==='1W')lb=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]+' '+(d.getMonth()+1)+'/'+d.getDate();else if(S.rng==='1M'||S.rng==='3M')lb=(d.getMonth()+1)+'/'+d.getDate();else lb=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+String(d.getFullYear()).slice(2);ctx.fillText(lb,xP(idx),H-4)}}
   drawBase();
-  var hover=function(e){e.preventDefault();var rect=cvs.getBoundingClientRect();var mx2=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;var idx=Math.round((mx2/W)*(data.length-1));if(idx<0||idx>=data.length){tip.style.opacity='0';return}var pt=data[idx],d=new Date(pt.time);var ts=(S.rng==='1H'||S.rng==='4H'||S.rng==='1D')?d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):d.toLocaleDateString([],{month:'short',day:'numeric'});tip.innerHTML=ts+'<br><strong>'+sy()+cv(pt.price).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong>';var tx=mx2+12;if(tx+130>W)tx=mx2-140;tip.style.left=tx+'px';tip.style.top=(yP(pt.price)-20)+'px';tip.style.opacity='1';drawBase();ctx.beginPath();ctx.moveTo(xP(idx),pT);ctx.lineTo(xP(idx),H-pB);ctx.strokeStyle='rgba(212,184,140,.3)';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(xP(idx),yP(pt.price),4,0,Math.PI*2);ctx.fillStyle=lnC;ctx.fill()};
+  var hover=function(e){e.preventDefault();var rect=cvs.getBoundingClientRect();var mx2=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;var idx=Math.round((mx2/W)*(data.length-1));if(idx<0||idx>=data.length){tip.style.opacity='0';return}var pt=data[idx],d=new Date(pt.time);var ts=d.toLocaleDateString([],{month:'short',day:'numeric',year:S.rng==='6M'||S.rng==='1Y'?'2-digit':undefined});tip.innerHTML=ts+'<br><strong>'+sy()+cv(pt.price).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</strong>';var tx=mx2+12;if(tx+130>W)tx=mx2-140;tip.style.left=tx+'px';tip.style.top=(yP(pt.price)-20)+'px';tip.style.opacity='1';drawBase();ctx.beginPath();ctx.moveTo(xP(idx),pT);ctx.lineTo(xP(idx),H-pB);ctx.strokeStyle='rgba(212,184,140,.3)';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(xP(idx),yP(pt.price),4,0,Math.PI*2);ctx.fillStyle=lnC;ctx.fill()};
   cvs.onmousemove=hover;cvs.ontouchmove=hover;cvs.onmouseleave=function(){tip.style.opacity='0';drawBase()};
 }
 
@@ -454,6 +458,8 @@ async function refreshAll(){await refreshPrices();renderAll();await bootstrapHis
   buildNav();
   var loaded=await load();
   await loadSnaps();
+  // Fix legacy range values
+  if(!RNGMS[S.rng])S.rng='1M';
   applyTheme();renderAll();
   if(loaded&&S.P.length){toast('Loaded '+S.P.length+' assets');await refreshAll()}
   else{if(!S.fhKey)toast('Set API keys in Settings to start');await loadChart()}
