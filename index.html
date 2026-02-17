@@ -176,9 +176,11 @@ async function fetchCryptoHist(sym,rng){
 async function fetchSH(sym){
   var ck=sym.toUpperCase()+'_h';
   if(hCache[ck]&&(Date.now()-hCache[ck].t)<3e5)return hCache[ck].d;
-  // 1. Local snapshots (free, instant)
+  // 1. Local snapshots (free, instant) — use if we have enough for the selected range
   var local=getLocalHist(sym);
-  if(local&&local.length>30){hCache[ck]={d:local,t:Date.now()};return local}
+  var minPts={'1W':3,'1M':10,'3M':30,'6M':60,'1Y':100};
+  var needed=minPts[S.rng]||10;
+  if(local&&local.length>=needed){hCache[ck]={d:local,t:Date.now()};return local}
   // 2. Twelve Data (800/day, primary history source)
   var td=await fetchTD(sym);
   if(td){hCache[ck]={d:td,t:Date.now()};return td}
@@ -192,7 +194,15 @@ async function fetchSH(sym){
   if(pd&&pd.price&&pd.pc)return[{time:Date.now()-864e5,price:pd.pc},{time:Date.now(),price:pd.price}];
   return null;
 }
-function filterR(pts,rng){if(!pts||pts.length<2)return pts;var cut=Date.now()-(RNGMS[rng]||864e5);var f=pts.filter(function(p){return p.time>=cut});return f.length>1?f:pts}
+function filterR(pts,rng){
+  if(!pts||pts.length<2)return pts;
+  // For daily data, use point count instead of timestamp cutoff
+  // This avoids weekend/holiday gaps causing empty charts
+  var targetDays={'1W':5,'1M':22,'3M':65,'6M':130,'1Y':365};
+  var n=targetDays[rng]||22;
+  if(pts.length<=n)return pts;
+  return pts.slice(-n);
+}
 
 /* ============ BOOTSTRAP HISTORY (portfolio assets only) ============ */
 async function bootstrapHistory(){
@@ -462,7 +472,28 @@ async function loadChart(){
   S.lastChart=data;
   if(!data||data.length<2){area.innerHTML='<div class="cMsg">No chart data</div>';if($('chD'))$('chD').textContent='';updateHeaderChange();return}
   var first=data[0].price,last=data[data.length-1].price,chg=last-first,pct=first>0?((chg/first)*100):0,sg=chg>=0?'+':'',cls=chg>0?'grn':'red',s=sy();
-  if($('chD'))$('chD').innerHTML='<span style="color:var(--'+cls+')">'+sg+s+Math.abs(cv(chg)).toFixed(2)+' ('+sg+pct.toFixed(2)+'%)</span> · '+S.rng;
+  // Build chart subtitle with value + price + change
+  var subH='';
+  if(S.selA){
+    // Individual asset view
+    var selAsset=S.P.find(function(x){return x.id===S.selA});
+    if(selAsset){
+      var sc=calc(selAsset);
+      var curP=sc.cp||0;
+      var assetVal=sc.g; // gross value = qty * price
+      subH='<div style="font-size:18px;font-family:var(--ser);color:var(--txt);margin-bottom:2px">'+fmt(assetVal)+'</div>';
+      subH+='<div style="font-size:12px;color:var(--tx2);margin-bottom:4px">'+s+cv(curP).toFixed(2)+'/sh × '+(selAsset.quantity||0)+'</div>';
+    }
+  }else{
+    // Portfolio view — show current net total
+    var tt=totals();
+    subH='<div style="font-size:18px;font-family:var(--ser);color:var(--txt);margin-bottom:2px">'+fmt(tt.n)+'</div>';
+  }
+  // Change line
+  var chgAbs=Math.abs(cv(chg));
+  var chgFmt=chgAbs>=1000?chgAbs.toLocaleString('en-US',{maximumFractionDigits:0}):chgAbs.toFixed(2);
+  subH+='<div style="font-size:13px;color:var(--'+cls+')">'+sg+s+chgFmt+' ('+sg+pct.toFixed(2)+'%) <span style="font-size:11px;opacity:.7">'+RNGL[S.rng]+'</span></div>';
+  if($('chD'))$('chD').innerHTML=subH;
   updateHeaderChange();
   area.innerHTML='<canvas id="chC"></canvas><div class="cTip" id="chTip"></div>';
   drawChart(data);
@@ -541,6 +572,24 @@ async function refreshAll(){await refreshPrices();renderAll();await bootstrapHis
   await loadSnaps();
   // Fix legacy range values
   if(!RNGMS[S.rng])S.rng='1M';
+
+  // === DEBUG TEST MODE (uncomment to test) ===
+  /*
+  S.P=[{id:'test1',type:'stock',symbol:'PLTR',quantity:10,taxPercent:25,alreadyNet:false,currency:'USD',location:'IBKR',displayName:'Palantir',isETF:false,createdAt:new Date().toISOString()}];
+  S.fhKey='test';S.tdKey='test';
+  var today=new Date();
+  var fakePrices=[170,180,160,140,100,100,100];
+  snapshots=[];
+  for(var fi=0;fi<fakePrices.length;fi++){
+    var fd=new Date(today.getTime()-((fakePrices.length-1-fi)*864e5));
+    var sn={date:dateStr(fd),prices:{PLTR:fakePrices[fi]}};
+    snapshots.push(sn);
+  }
+  S.prices={PLTR:{price:100,pc:100,src:'TEST'}};
+  hCache={};
+  */
+  // === END DEBUG ===
+
   applyTheme();renderAll();
   if(loaded&&S.P.length){toast('Loaded '+S.P.length+' assets');await refreshAll()}
   else{if(!S.fhKey)toast('Set API keys in Settings to start');await loadChart()}
