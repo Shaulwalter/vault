@@ -83,7 +83,7 @@
 /* ============ STATE ============ */
 var S={P:[],prices:{},xR:{USD:1,ILS:3.6,EUR:.92,GBP:.79},fxHist:{},dC:'USD',
 fhKey:'',avKey:'',tdKey:'',
-isDark:false,track:'PLTR',cLocs:[],selA:null,rng:'1M',editId:null,mTp:null,lastChart:null,
+isDark:false,track:'PLTR',cLocs:[],selA:null,rng:'1M',editId:null,mTp:null,lastChart:null,lastPortfolioChart:null,
 _fxStart:null,_fxEnd:null};
 var hCache={},useLS=false;
 var apiSt={fh:{ok:null,last:null,calls:0},td:{ok:null,last:null,calls:0},av:{ok:null,last:null,calls:0},cg:{ok:null,last:null,calls:0},fx:{ok:null,last:null,calls:0}};
@@ -296,8 +296,9 @@ function renderInsights(){
 
 function updateHeaderChange(){
   var el=$('bigC'),fx=$('fxL');if(!el)return;
-  if(!S.lastChart||S.lastChart.length<2){el.className='bigC fl';el.textContent='';if(fx)fx.innerHTML='';return}
-  var first=S.lastChart[0].price,last=S.lastChart[S.lastChart.length-1].price;
+  var chartData=S.lastPortfolioChart;
+  if(!chartData||chartData.length<2){el.className='bigC fl';el.textContent='';if(fx)fx.innerHTML='';return}
+  var first=chartData[0].price,last=chartData[chartData.length-1].price;
   var chg=last-first,pct=first>0?((chg/first)*100):0,sg=chg>=0?'+':'',cls=chg>0?'up':chg<0?'dn':'fl',s=sy();
   el.className='bigC '+cls;
   el.innerHTML=sg+s+Math.abs(cv(chg)).toLocaleString('en-US',{maximumFractionDigits:Math.abs(cv(chg))>=1000?0:2})+' ('+sg+pct.toFixed(2)+'%) <span style="font-size:11px;opacity:.7">'+RNGL[S.rng]+'</span>';
@@ -438,35 +439,45 @@ async function loadChart(){
   var area=$('chA');if(!area)return;
   area.innerHTML='<div class="cMsg" style="animation:pulse 1.5s infinite">Loading…</div>';
   if(S.dC!=='USD')await fetchFxHist(RNGDAYS[S.rng]||30);
-  var data=null,title='Portfolio';
+  var data=null,title='Portfolio',portfolioData=null;
+  // Always build portfolio aggregate for the header
+  var series=[];
+  for(var i=0;i<S.P.length;i++){
+    var a2=S.P[i];
+    if(a2.type==='stock'||a2.type==='option'){var raw2=await fetchSH(a2.symbol);var h=raw2?filterR(raw2,S.rng):null;if(h&&h.length>1)series.push({a:a2,d:h});await delay(200)}
+    else if(a2.type==='crypto'){var h2=await fetchCryptoHist(a2.symbol,S.rng);if(h2&&h2.length>1)series.push({a:a2,d:h2});await delay(200)}
+  }
+  if(series.length){
+    var ref=series[0];for(var j=1;j<series.length;j++)if(series[j].d.length>ref.d.length)ref=series[j];
+    var sv=0;S.P.forEach(function(x){var c=calc(x);if(x.type==='savings'||x.type==='cash')sv+=c.n});
+    portfolioData=ref.d.map(function(pt,idx){
+      var tot=sv;
+      for(var k=0;k<series.length;k++){
+        var se=series[k],si=Math.min(idx,se.d.length-1),p=se.d[si].price;
+        var aa=se.a,gross=0;
+        if(aa.type==='option'){gross=Math.max(0,p-aa.exercisePrice)*aa.quantity}
+        else{gross=p*aa.quantity}
+        var tax=aa.alreadyNet?0:gross*((aa.taxPercent||0)/100);
+        tot+=gross-tax;
+      }
+      return{time:pt.time,price:tot};
+    });
+  }
+  S.lastPortfolioChart=portfolioData;
+
   if(S.selA){
+    // Individual asset chart
     var a=S.P.find(function(x){return x.id===S.selA});
-    if(a&&(a.type==='stock'||a.type==='option')){var raw=await fetchSH(a.symbol);data=raw?filterR(raw,S.rng):null;title=a.symbol}
-    else if(a&&a.type==='crypto'){data=await fetchCryptoHist(a.symbol,S.rng);title=a.symbol}
+    if(a&&(a.type==='stock'||a.type==='option')){
+      // Reuse from series if available
+      var found=null;for(var si2=0;si2<series.length;si2++){if(series[si2].a.id===S.selA){found=series[si2].d;break}}
+      data=found;title=a.symbol;
+    }else if(a&&a.type==='crypto'){
+      var found2=null;for(var si3=0;si3<series.length;si3++){if(series[si3].a.id===S.selA){found2=series[si3].d;break}}
+      data=found2;title=a.symbol;
+    }
   }else{
-    var series=[];
-    for(var i=0;i<S.P.length;i++){
-      var a2=S.P[i];
-      if(a2.type==='stock'||a2.type==='option'){var raw2=await fetchSH(a2.symbol);var h=raw2?filterR(raw2,S.rng):null;if(h&&h.length>1)series.push({a:a2,d:h});await delay(200)}
-      else if(a2.type==='crypto'){var h2=await fetchCryptoHist(a2.symbol,S.rng);if(h2&&h2.length>1)series.push({a:a2,d:h2});await delay(200)}
-    }
-    if(series.length){
-      var ref=series[0];for(var j=1;j<series.length;j++)if(series[j].d.length>ref.d.length)ref=series[j];
-      // Static assets NET value
-      var sv=0;S.P.forEach(function(x){var c=calc(x);if(x.type==='savings'||x.type==='cash')sv+=c.n});
-      data=ref.d.map(function(pt,idx){
-        var tot=sv;
-        for(var k=0;k<series.length;k++){
-          var se=series[k],si=Math.min(idx,se.d.length-1),p=se.d[si].price;
-          var aa=se.a,gross=0;
-          if(aa.type==='option'){gross=Math.max(0,p-aa.exercisePrice)*aa.quantity}
-          else{gross=p*aa.quantity}
-          var tax=aa.alreadyNet?0:gross*((aa.taxPercent||0)/100);
-          tot+=gross-tax;
-        }
-        return{time:pt.time,price:tot};
-      });
-    }
+    data=portfolioData;
   }
   if($('chT'))$('chT').textContent=title;
   S.lastChart=data;
