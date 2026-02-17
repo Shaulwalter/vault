@@ -89,9 +89,11 @@ fhKey:'',avKey:'',
 isDark:false,track:'PLTR',cLocs:[],selA:null,rng:'1D',editId:null,mTp:null,lastChart:null};
 var api={fh:null,av:null,cg:null,fx:null},hCache={},storageWorks=false,useLS=false;
 var SK='vault-portfolio-data';
+var SNAP_KEY='vault-price-snapshots'; // daily price snapshots
+var snapshots=[]; // [{date:'2026-02-17',prices:{PLTR:131.41,...}},...]
 var LOCS=['Discount Bank','IBKR','Wise','Metamask','Coinbase','Shareworks'];
 var ETFS='SPY,QQQ,VOO,VTI,IVV,SCHD,VEA,VWO,VTV,VUG,BND,AGG,IEMG,VIG,VXUS,IWM,IWF,IWD,VGT,XLF,XLE,XLV,XLK,XLI,XLU,XLP,XLRE,XLC,XLY,XLB,VNQ,ARKK,ARKG,ARKW,ARKF,ARKQ,SOXL,TQQQ,SQQQ,SPXL,TLT,HYG,LQD,EMB,GLD,SLV,USO,DIA,MDY,IJR,IEFA,EFA,EEM'.split(',');
-var CG={BTC:'bitcoin',ETH:'ethereum',SOL:'solana',ADA:'cardano',DOT:'polkadot',AVAX:'avalanche-2',LINK:'chainlink',XRP:'ripple',DOGE:'dogecoin',LTC:'litecoin',UNI:'uniswap',ATOM:'cosmos',NEAR:'near',APT:'aptos',ARB:'arbitrum',OP:'optimism',SUI:'sui',BNB:'binancecoin',TON:'the-open-network',PEPE:'pepe',AAVE:'aave',MKR:'maker',TIA:'celestia',STX:'blockstack',SHIB:'shiba-inu',CRO:'crypto-com-chain'};
+var CG={BTC:'bitcoin',ETH:'ethereum',SOL:'solana',ADA:'cardano',DOT:'polkadot',AVAX:'avalanche-2',LINK:'chainlink',XRP:'ripple',DOGE:'dogecoin',LTC:'litecoin',UNI:'uniswap',ATOM:'cosmos',NEAR:'near',APT:'aptos',ARB:'arbitrum',OP:'optimism',SUI:'sui',BNB:'binancecoin',TON:'the-open-network',PEPE:'pepe',AAVE:'aave',MKR:'maker',TIA:'celestia',STX:'blockstack',SHIB:'shiba-inu',CRO:'crypto-com-chain',MATIC:'matic-network',RENDER:'render-token',INJ:'injective-protocol',SEI:'sei-network',FET:'fetch-ai',WIF:'dogwifcoin',JUP:'jupiter-exchange-solana',PYTH:'pyth-network',HBAR:'hedera-hashgraph',FIL:'filecoin',ALGO:'algorand',VET:'vechain',SAND:'the-sandbox',MANA:'decentraland',AXS:'axie-infinity',ENJ:'enjincoin',GRT:'the-graph',COMP:'compound-governance-token',SNX:'havven',ASTR:'astar',IMX:'immutable-x',APE:'apecoin',LDO:'lido-dao',RNDR:'render-token',POL:'matic-network'};
 var BCOL={etf:'#d4b88c',stocks:'#8db87a',deposits:'#b8a07a',crypto:'#7ab8b8',cash:'#a07ab8'};
 var RNGL={'1H':'1h','4H':'4h','1D':'today','1W':'1w','1M':'1m','6M':'6m','1Y':'1y'};
 var RNGMS={'1H':36e5,'4H':144e5,'1D':864e5,'1W':6048e5,'1M':2592e6,'6M':15552e6,'1Y':31536e6};
@@ -109,8 +111,8 @@ function getBucket(a){if(a.type==='savings')return'deposits';if(a.type==='cash')
 function delay(ms){return new Promise(function(r){setTimeout(r,ms)})}
 function hasCrypto(){return S.P.some(function(a){return a.type==='crypto'})}
 function cleanP(){return S.P.map(function(a){var o={};for(var k in a)if(k.charAt(0)!=='_')o[k]=a[k];return o})}
-function getPayload(){return{portfolio:cleanP(),prices:S.prices,fxHist:S.fxHist,dC:S.dC,fhKey:S.fhKey,avKey:S.avKey,isDark:S.isDark,track:S.track,cLocs:S.cLocs}}
-function applyPayload(d){if(!d||!d.portfolio)return false;S.P=d.portfolio;if(d.prices)S.prices=d.prices;if(d.fxHist)S.fxHist=d.fxHist;if(d.fhKey)S.fhKey=d.fhKey;if(d.avKey)S.avKey=d.avKey;if(d.dC)S.dC=d.dC;if(d.isDark!==undefined)S.isDark=d.isDark;if(d.track)S.track=d.track;if(d.cLocs)S.cLocs=d.cLocs;return true}
+function getPayload(){return{portfolio:cleanP(),prices:S.prices,fxHist:S.fxHist,dC:S.dC,fhKey:S.fhKey,avKey:S.avKey,isDark:S.isDark,track:S.track,cLocs:S.cLocs,snapshots:snapshots}}
+function applyPayload(d){if(!d||!d.portfolio)return false;S.P=d.portfolio;if(d.prices)S.prices=d.prices;if(d.fxHist)S.fxHist=d.fxHist;if(d.fhKey)S.fhKey=d.fhKey;if(d.avKey)S.avKey=d.avKey;if(d.dC)S.dC=d.dC;if(d.isDark!==undefined)S.isDark=d.isDark;if(d.track)S.track=d.track;if(d.cLocs)S.cLocs=d.cLocs;if(d.snapshots)snapshots=d.snapshots;return true}
 function dateStr(d){return d.toISOString().split('T')[0]}
 
 // === STORAGE ===
@@ -118,7 +120,87 @@ function testLS(){try{localStorage.setItem('_t','1');localStorage.removeItem('_t
 async function save(){var p=JSON.stringify(getPayload());if(useLS){try{localStorage.setItem(SK,p);storageWorks=true}catch(e){storageWorks=false}}else{try{await window.storage.set(SK,p);storageWorks=true}catch(e){storageWorks=false}}}
 async function load(){if(testLS()){useLS=true;storageWorks=true;try{var r=localStorage.getItem(SK);if(r){var d=JSON.parse(r);if(d.portfolio&&d.portfolio.length>0){applyPayload(d);return true}}}catch(e){}return false}try{await window.storage.set('_t','1');storageWorks=true}catch(e){storageWorks=false;return false}try{var r2=await window.storage.get(SK);if(r2&&r2.value){var d2=JSON.parse(r2.value);if(d2.portfolio&&d2.portfolio.length>0){applyPayload(d2);return true}}}catch(e){}return false}
 
-// === FETCH ===
+// === PRICE SNAPSHOTS ===
+function saveSnapshots(){
+  try{
+    // Keep max 365 days
+    var trimmed=snapshots.slice(-365);
+    if(useLS){localStorage.setItem(SNAP_KEY,JSON.stringify(trimmed))}
+    else{try{window.storage.set(SNAP_KEY,JSON.stringify(trimmed))}catch(e){}}
+  }catch(e){}
+}
+function loadSnapshots(){
+  try{
+    var raw;
+    if(useLS){raw=localStorage.getItem(SNAP_KEY)}
+    if(raw){snapshots=JSON.parse(raw);return}
+  }catch(e){}
+  // Try window.storage
+  try{
+    window.storage.get(SNAP_KEY).then(function(r){
+      if(r&&r.value)snapshots=JSON.parse(r.value);
+    }).catch(function(){});
+  }catch(e){}
+}
+function takeSnapshot(){
+  // Only snapshot if we have prices
+  if(!S.prices||!Object.keys(S.prices).length)return;
+  var today=dateStr(new Date());
+  // Don't double-snapshot same day
+  if(snapshots.length&&snapshots[snapshots.length-1].date===today)return;
+  var snap={date:today,prices:{}};
+  for(var sym in S.prices){
+    if(S.prices[sym]&&S.prices[sym].price){
+      snap.prices[sym]=S.prices[sym].price;
+    }
+  }
+  snapshots.push(snap);
+  saveSnapshots();
+}
+function getLocalHistory(sym){
+  // Build chart data from snapshots for a given symbol
+  var key=sym.toUpperCase();
+  var pts=[];
+  for(var i=0;i<snapshots.length;i++){
+    var s=snapshots[i];
+    if(s.prices&&s.prices[key]){
+      pts.push({time:new Date(s.date).getTime(),price:s.prices[key]});
+    }
+  }
+  return pts.length>1?pts:null;
+}
+
+// === BOOTSTRAP: Fetch and store 1 year of history on first run ===
+async function bootstrapHistory(){
+  if(snapshots.length>30)return; // already have enough data
+  toast('Building price history…');
+  // Fetch stock history via Finnhub/AV and convert to snapshots
+  var syms={};
+  S.P.forEach(function(a){if(a.symbol&&(a.type==='stock'||a.type==='option'))syms[a.symbol.toUpperCase()]='stock';if(a.symbol&&a.type==='crypto')syms[a.symbol.toUpperCase()]='crypto'});
+  var allPts={}; // {date: {SYM: price, ...}}
+  for(var sym in syms){
+    var pts=null;
+    if(syms[sym]==='crypto'){pts=await fetchCH(sym,'365')}
+    else{
+      // Try Finnhub candles for 1 year
+      if(S.fhKey){try{var n=Math.floor(Date.now()/1000);var r=await fetch('https://finnhub.io/api/v1/stock/candle?symbol='+encodeURIComponent(sym)+'&resolution=D&from='+(n-86400*365)+'&to='+n+'&token='+S.fhKey);if(r.ok){var d=await r.json();if(d.s==='ok'&&d.c&&d.c.length>1)pts=d.t.map(function(t,j){return{time:t*1000,price:d.c[j]}})}}catch(e){}}
+      // Fallback to AV
+      if(!pts&&S.avKey){try{var r2=await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol='+encodeURIComponent(sym)+'&outputsize=compact&apikey='+S.avKey);if(r2.ok){var d2=await r2.json();var ts=d2['Time Series (Daily)'];if(ts){pts=[];var ks=Object.keys(ts).sort();for(var i=0;i<ks.length;i++)pts.push({time:new Date(ks[i]).getTime(),price:parseFloat(ts[ks[i]]['4. close'])})}}}catch(e){}}
+    }
+    if(pts&&pts.length){for(var j=0;j<pts.length;j++){var dt=dateStr(new Date(pts[j].time));if(!allPts[dt])allPts[dt]={};allPts[dt][sym]=pts[j].price}}
+    await delay(300); // rate limit
+  }
+  // Convert to snapshots
+  var dates=Object.keys(allPts).sort();
+  for(var k=0;k<dates.length;k++){
+    var existing=snapshots.find(function(s){return s.date===dates[k]});
+    if(existing){for(var s in allPts[dates[k]])existing.prices[s]=allPts[dates[k]][s]}
+    else{snapshots.push({date:dates[k],prices:allPts[dates[k]]})}
+  }
+  snapshots.sort(function(a,b){return a.date<b.date?-1:1});
+  saveSnapshots();
+  toast('History loaded: '+dates.length+' days');
+}
 async function fetchFH(sym){if(!S.fhKey)return null;try{var r=await fetch('https://finnhub.io/api/v1/quote?symbol='+encodeURIComponent(sym)+'&token='+S.fhKey);if(!r.ok){api.fh=false;return null}var d=await r.json();if(d&&typeof d.c==='number'&&d.c>0){api.fh=true;return{price:d.c,pc:d.pc||d.c,src:'FH'}}}catch(e){api.fh=false}return null}
 async function fetchCG(sym){var id=CG[sym.toUpperCase()]||sym.toLowerCase();try{var r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids='+id+'&vs_currencies=usd&include_24hr_change=true');if(!r.ok){api.cg=false;return null}var d=await r.json();if(d[id]&&d[id].usd){api.cg=true;return{price:d[id].usd,ch24:d[id].usd_24h_change||0,src:'CG'}}}catch(e){api.cg=false}return null}
 async function fetchXR(){for(var u of['https://api.exchangerate-api.com/v4/latest/USD','https://open.er-api.com/v6/latest/USD']){try{var r=await fetch(u);if(!r.ok)continue;var d=await r.json();if(d.rates){S.xR={USD:1,ILS:d.rates.ILS||3.6,EUR:d.rates.EUR||.92,GBP:d.rates.GBP||.79};api.fx=true;return}}catch(e){}}api.fx=false}
@@ -158,10 +240,19 @@ async function fetchName(sym){if(!S.fhKey||!sym)return'';try{var r=await fetch('
 async function fetchSH(sym){
   var ck=sym.toUpperCase()+'_h';
   if(hCache[ck]&&(Date.now()-hCache[ck].t)<3e5)return hCache[ck].d;
+  // 1. Try local snapshots first (free, instant, no rate limit)
+  var local=getLocalHistory(sym);
+  if(local&&local.length>5){hCache[ck]={d:local,t:Date.now()};return local}
+  // 2. Try Finnhub candles (60/min)
   if(S.fhKey){try{var n=Math.floor(Date.now()/1000);var from=n-86400*100;var r=await fetch('https://finnhub.io/api/v1/stock/candle?symbol='+encodeURIComponent(sym)+'&resolution=D&from='+from+'&to='+n+'&token='+S.fhKey);if(r.ok){var d=await r.json();if(d.s==='ok'&&d.c&&d.c.length>1){var pts=d.t.map(function(t,j){return{time:t*1000,price:d.c[j]}});hCache[ck]={d:pts,t:Date.now()};return pts}}}catch(e){}}
+  // 3. Try Alpha Vantage (25/day)
   if(S.avKey){try{var r2=await fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol='+encodeURIComponent(sym)+'&outputsize=compact&apikey='+S.avKey);if(r2.ok){var d2=await r2.json();var ts=d2['Time Series (Daily)'];if(ts){var pts2=[],ks=Object.keys(ts).sort();for(var i=0;i<ks.length;i++)pts2.push({time:new Date(ks[i]).getTime(),price:parseFloat(ts[ks[i]]['4. close'])});if(pts2.length>1){hCache[ck]={d:pts2,t:Date.now()};api.av=true;return pts2}}if(d2.Note||d2.Information)api.av=false}}catch(e){api.av=false}}
+  // 4. Use local snapshots even if sparse
+  if(local&&local.length>1)return local;
+  // 5. Quote-based 2-point chart (always works)
   var pd=S.prices[sym.toUpperCase()];if(pd&&pd.price&&pd.pc)return[{time:Date.now()-864e5,price:pd.pc},{time:Date.now(),price:pd.price}];
-  return null}
+  return null;
+}
 async function fetchCH(sym,rng){var id=CG[sym.toUpperCase()]||sym.toLowerCase();var dm={'1H':'1','4H':'1','1D':'1','1W':'7','1M':'30','6M':'180','1Y':'365'};try{var r=await fetch('https://api.coingecko.com/api/v3/coins/'+id+'/market_chart?vs_currency=usd&days='+(dm[rng]||'1'));if(r.ok){var d=await r.json();if(d.prices&&d.prices.length>1){api.cg=true;return d.prices.map(function(p){return{time:p[0],price:p[1]}})}}}catch(e){api.cg=false}return null}
 function filterR(pts,rng){if(!pts||pts.length<2)return pts;var cut=Date.now()-(RNGMS[rng]||864e5);var f=pts.filter(function(p){return p.time>=cut});return f.length>1?f:pts}
 
@@ -238,7 +329,7 @@ function renderManage(){
       if((a.type==='stock'||a.type==='option')&&c.pc&&c.cp){var ch2=c.cp-c.pc,pct2=(ch2/c.pc)*100;chH='<div class="cdCh '+(ch2>=0?'up':'dn')+'">'+(ch2>=0?'+':'')+'$'+ch2.toFixed(2)+' ('+(ch2>=0?'+':'')+pct2.toFixed(2)+'%) today</div>'}
       else if(a.type==='crypto'&&c.ch!=null){chH='<div class="cdCh '+(c.ch>=0?'up':'dn')+'">'+(c.ch>=0?'+':'')+c.ch.toFixed(2)+'% 24h</div>'}
       h+='<div class="cd" style="cursor:default"><div class="cdR"><div><div class="cdN">'+lb+' <span class="bg">'+tag+'</span></div>'+sub+'<div class="cdM">'+meta+loc+'</div>'+chH+'</div><div class="cdV"><div class="cdG">'+fmt(c.g)+'</div><div class="cdNv">Net: '+fmt(c.n)+'</div></div></div><div class="mAct"><button onclick="editAsset(\''+a.id+'\')">Edit</button><button class="dng" onclick="deleteAsset(\''+a.id+'\')">Delete</button></div></div>'}}
-  h+='<div class="ioS"><div class="insT">Backup & Restore</div><div class="ioR"><button onclick="doExport()">Export</button><button onclick="$(\'impF\').click()">Import</button></div></div>';
+  h+='<div class="ioS"><div class="insT">Backup & Restore</div><div class="ioR"><button onclick="doExport()">Export</button><button onclick="document.getElementById(\'impF\').click()">Import</button></div></div>';
   $('pg-manage').innerHTML=h}
 
 // === RENDER SETTINGS ===
@@ -283,9 +374,25 @@ function deleteAsset(id){if(!confirm('Remove?'))return;S.P=S.P.filter(function(x
 window.openModal=openModal;window.closeModal=closeModal;window.saveAsset=saveAsset;window.editAsset=editAsset;window.deleteAsset=deleteAsset;window.switchTab=switchTab;
 function doExport(){var d=getPayload();d.exportedAt=new Date().toISOString();var b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});var u=URL.createObjectURL(b);var el=document.createElement('a');el.href=u;el.download='vault-'+new Date().toISOString().split('T')[0]+'.json';el.click();URL.revokeObjectURL(u);toast('Exported')}
 window.doExport=doExport;
-$('impF').onchange=function(ev){var f=ev.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){try{var d=JSON.parse(e.target.result);if(applyPayload(d)){applyTheme();save();toast('Imported '+S.P.length+' assets');renderAll();refreshAll()}else toast('Invalid')}catch(err){toast('Error')}};r.readAsText(f);ev.target.value=''};
+$('impF').addEventListener('change',function(ev){
+  var f=ev.target.files[0];if(!f)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var d=JSON.parse(e.target.result);
+      if(applyPayload(d)){
+        applyTheme();save();
+        if(d.snapshots){snapshots=d.snapshots;saveSnapshots()}
+        toast('Imported '+S.P.length+' assets');
+        renderAll();refreshAll();
+      }else{toast('Invalid file')}
+    }catch(err){toast('Error reading file')}
+  };
+  reader.readAsText(f);
+  ev.target.value='';
+});
 $('moX').onclick=closeModal;$('svBtn').onclick=saveAsset;$('moBg').onclick=function(e){if(e.target===$('moBg'))closeModal()};document.onkeydown=function(e){if(e.key==='Escape')closeModal()};
-async function refreshAll(){await refreshPrices();renderAll();await loadChart()}
+async function refreshAll(){await refreshPrices();renderAll();await bootstrapHistory();await loadChart()}
 (async function(){buildNav();var loaded=await load();applyTheme();renderAll();  if(loaded&&S.P.length){toast('Loaded '+S.P.length+' assets');await refreshAll()}else{
     if(!S.fhKey&&!S.avKey){toast('Set up API keys in Settings to get started')}
     await loadChart()
