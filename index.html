@@ -8,8 +8,8 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F98D;</text></svg>">
 <title>Vault</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap');
-:root{--bg:#1a1714;--bg2:#1f1b17;--card:#1a1714;--cardH:#252119;--inp:#1a1714;--brd:#3a3430;--brdL:#2e2924;--txt:#e8e0d4;--tx2:#b0a494;--tx3:#8a7d6e;--acc:#d4b88c;--ac2:#a08a64;--grn:#8db87a;--red:#c48080;--ser:'Cormorant Garamond',Georgia,serif;--san:'Inter',-apple-system,sans-serif}
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter:wght@300;400;500;600&display=swap');
+:root{--bg:#1a1714;--bg2:#1f1b17;--card:#1a1714;--cardH:#252119;--inp:#1a1714;--brd:#3a3430;--brdL:#2e2924;--txt:#e8e0d4;--tx2:#b0a494;--tx3:#8a7d6e;--acc:#d4b88c;--ac2:#a08a64;--grn:#8db87a;--red:#c48080;--ser:'Fraunces',Georgia,serif;--san:'Inter',-apple-system,sans-serif}
 .light{--bg:#f4f0eb;--bg2:#ece7e0;--card:#f4f0eb;--cardH:#ede8e1;--inp:#ebe6df;--brd:#d4cec5;--brdL:#e0dbd4;--txt:#2a2520;--tx2:#5a5248;--tx3:#7a7268;--acc:#8a7050;--ac2:#a08a64;--grn:#4a7a3a;--red:#a05050}
 *{margin:0;padding:0;box-sizing:border-box}html,body{background:var(--bg);color:var(--txt);font-family:var(--san);font-weight:300;font-size:15px;line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased;transition:background .3s,color .3s;font-variant-numeric:tabular-nums}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--brd);border-radius:2px}
@@ -25,6 +25,7 @@
 .lbl{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--tx3);margin-bottom:20px;text-align:center}
 .sRow{display:flex;justify-content:center;gap:40px;flex-wrap:wrap;text-align:center}.sI .l{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--tx3);margin-bottom:4px}.sI .v{font-family:var(--ser);font-size:20px;font-weight:400}.sI .vG{color:var(--tx2)}.sI .vN{color:var(--acc)}.sI .vT{color:var(--red)}
 .cTog{display:inline-flex;border:1px solid var(--brd);border-radius:20px;overflow:hidden;margin-top:20px}.cTog button{background:none;border:none;border-right:1px solid var(--brd);color:var(--tx3);font-family:var(--san);font-size:11px;letter-spacing:2px;padding:6px 15px;cursor:pointer;transition:background .15s}.cTog button:last-child{border-right:none}.cTog button.act{background:var(--acc);color:var(--bg)}
+.cTog.wide{display:flex;width:100%;margin-top:0}.cTog.wide button{flex:1;text-align:center;padding:8px 6px}
 .rng{display:inline-flex;border:1px solid var(--brd);border-radius:20px;overflow:hidden}.rng button{background:none;border:none;border-right:1px solid var(--brd);color:var(--tx3);font-family:var(--san);font-size:10px;letter-spacing:1px;padding:5px 11px;cursor:pointer;transition:background .15s}.rng button:last-child{border-right:none}.rng button.act{background:var(--acc);color:var(--bg)}
 .ins{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 55%) var(--cardH);border:1px solid var(--brdL);border-radius:20px;padding:24px;margin-bottom:18px;box-shadow:0 2px 10px rgba(0,0,0,.05),inset 0 1px 0 rgba(255,255,255,.05)}.insT{font-family:var(--ser);font-weight:400;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--tx2);margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:9px}
 .hero{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0) 45%) var(--cardH);border:1px solid var(--brdL);border-radius:22px;padding:38px 24px 30px;margin-bottom:18px;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.06),inset 0 1px 0 rgba(255,255,255,.05);position:relative;overflow:hidden}.hero::before{content:'';position:absolute;top:0;left:15%;right:15%;height:3px;background:linear-gradient(90deg,transparent,var(--acc),transparent);opacity:.5}
@@ -282,7 +283,7 @@ cells+='<div class="insCell"><div class="il">Top 3 Concentration</div><div class
 cells+='<div class="insCell"><div class="il">Cash / Idle Money</div><div class="iv">'+idlePct.toFixed(1)+'%</div><div class="is">'+fmt(idleG,true)+" uninvested"+idleTag+"</div></div>";
 cells+='<div class="insCell"><div class="il">Estimated Tax Exposure</div><div class="iv dn">-'+fmt(t.t,true)+'</div><div class="is">'+(t.g?(t.t/t.g*100).toFixed(1):0)+"% of gross</div></div>";
 cells+='<div class="insCell"><div class="il">Today\'s Movers</div><div class="iv">'+(best?esc(best.a.symbol)+" "+(best.pct>=0?"+":"")+best.pct.toFixed(1)+"%":"—")+'</div><div class="is">'+(worst&&worst!==best?"worst: "+esc(worst.a.symbol)+" "+worst.pct.toFixed(1)+"%":"no other movers today")+"</div></div>";
-var allocTogH='<div class="segRow" id="allocTog"><div class="cTog">'+[["type","Type"],["holdings","Holdings"],["currency","Currency"]].map(function(v){return'<button data-v="'+v[0]+'" onclick="switchAllocView(\''+v[0]+'\')"'+(S.allocView===v[0]?' class="act"':"")+">"+v[1]+"</button>"}).join("")+"</div></div>";
+var allocTogH='<div class="segRow" id="allocTog"><div class="cTog wide">'+[["type","Type"],["holdings","Holdings"],["currency","Currency"]].map(function(v){return'<button data-v="'+v[0]+'" onclick="switchAllocView(\''+v[0]+'\')"'+(S.allocView===v[0]?' class="act"':"")+">"+v[1]+"</button>"}).join("")+"</div></div>";
 var locSums={},locOrder=[],totalG=t.g||1;activeP().forEach(function(a){var loc=a.location||"Unassigned";if(locSums[loc]===undefined){locSums[loc]=0;locOrder.push(loc)}locSums[loc]+=calc(a).g});locOrder.sort(function(x,y){return locSums[y]-locSums[x]});var locH="";for(var li=0;li<locOrder.length;li++){var loc=locOrder[li],lv=locSums[loc],lpct=totalG?(lv/totalG*100):0;locH+='<div class="sgR clk" data-loc="'+esc(loc)+'"><div class="sgLb">'+esc(loc)+'</div><div style="text-align:right;display:flex;align-items:center"><div><div style="font-family:var(--ser);font-size:15px;color:var(--txt)">'+fmt(lv,true)+'</div><div style="font-size:10px;color:var(--tx3)">'+lpct.toFixed(1)+'%</div></div><span class="chev">&rsaquo;</span></div></div>'}
 sec.innerHTML='<div class="ins"><div class="insT">'+ic("target")+'Insights</div>'+featH+'<div class="insGrid">'+cells+'</div></div><div class="ins"><div class="insT">'+ic("pie")+"Allocation</div>"+allocTogH+'<div id="allocBody"><div id="allocDonut"></div></div></div><div class="ins"><div class="insT">'+ic("pin")+"By Source</div>"+locH+"</div>";
 sec.onclick=function(e){var lo=e.target.closest("[data-loc]");if(lo){filterByLoc(lo.dataset.loc)}};
@@ -500,9 +501,9 @@ function infoHtml(){
 
 function cssVar(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
 function drawSpaced(ctx,text,x,y,sp,align){align=align||"left";var chars=text.split(""),widths=chars.map(function(c){return ctx.measureText(c).width}),total=widths.reduce(function(a,b){return a+b},0)+sp*(chars.length-1);var sx=align==="center"?x-total/2:align==="right"?x-total:x;var pa=ctx.textAlign;ctx.textAlign="left";for(var i=0;i<chars.length;i++){ctx.fillText(chars[i],sx,y);sx+=widths[i]+sp}ctx.textAlign=pa}
-function drawStat(ctx,cx,y,label,val,valColor,labelColor){var pa=ctx.textAlign;ctx.textAlign="center";ctx.font="300 10px Inter, sans-serif";ctx.fillStyle=labelColor;drawSpaced(ctx,label,cx,y,2,"center");ctx.font="400 18px 'Cormorant Garamond', Georgia, serif";ctx.fillStyle=valColor;ctx.fillText(val,cx,y+23);ctx.textAlign=pa}
+function drawStat(ctx,cx,y,label,val,valColor,labelColor){var pa=ctx.textAlign;ctx.textAlign="center";ctx.font="300 10px Inter, sans-serif";ctx.fillStyle=labelColor;drawSpaced(ctx,label,cx,y,2,"center");ctx.font="400 18px 'Fraunces', Georgia, serif";ctx.fillStyle=valColor;ctx.fillText(val,cx,y+23);ctx.textAlign=pa}
 
-function sectionHead(ctx,text,x,y,color){ctx.textAlign="left";ctx.font="400 12px 'Cormorant Garamond', Georgia, serif";ctx.fillStyle=color;drawSpaced(ctx,text,x,y,2,"left")}
+function sectionHead(ctx,text,x,y,color){ctx.textAlign="left";ctx.font="400 12px 'Fraunces', Georgia, serif";ctx.fillStyle=color;drawSpaced(ctx,text,x,y,2,"left")}
 function reportLayout(ctx,W,pad){
   // Shared draw routine, called twice: once with ctx=null to measure total
   // height, once with a real ctx to draw. Keeps the two in lockstep - no
@@ -528,7 +529,7 @@ function reportLayout(ctx,W,pad){
   var tsTxt=now.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})+" "+String.fromCharCode(183)+" "+now.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
   if(draw){ctx.font="300 10px Inter, sans-serif";ctx.fillStyle=tx3C;ctx.fillText(tsTxt,W/2,y)}
   y+=38;
-  if(draw){ctx.font="300 36px 'Cormorant Garamond', Georgia, serif";ctx.fillStyle=txtC;ctx.fillText(fmt(t.n),W/2,y)}
+  if(draw){ctx.font="300 36px 'Fraunces', Georgia, serif";ctx.fillStyle=txtC;ctx.fillText(fmt(t.n),W/2,y)}
   y+=17;
   if(draw){ctx.font="300 9px Inter, sans-serif";ctx.fillStyle=tx3C;drawSpaced(ctx,"TOTAL NET VALUE",W/2,y,2,"center")}
   y+=30;
