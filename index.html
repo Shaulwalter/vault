@@ -194,7 +194,7 @@ function typeAllocation(){var m={etf:0,stocks:0,deposits:0,crypto:0,cash:0};acti
 // accounts/locations) into one entry, so "largest holding" / concentration / allocation reflect the
 // real consolidated position rather than counting each account row separately. Cash/deposit entries
 // are kept separate per account since those are genuinely distinct accounts, not fungible positions.
-function groupKey(a){return(a.type==="stock"||a.type==="option"||a.type==="crypto")?a.type+":"+(a.symbol||"").toUpperCase():"id:"+a.id}
+function groupKey(a){return(a.type==="stock"||a.type==="option"||a.type==="crypto")?"sym:"+(a.symbol||"").toUpperCase():"id:"+a.id}
 function groupedHoldings(){var groups={},order=[];activeP().forEach(function(a){var k=groupKey(a);if(!groups[k]){groups[k]={key:k,type:a.type,symbol:a.symbol,name:(a.type==="cash"||a.type==="savings")?a.name:a.symbol,displayName:a.displayName||"",assets:[],g:0,n:0,tx:0,quantity:0};order.push(k)}var c=calc(a),grp=groups[k];grp.assets.push(a);grp.g+=c.g;grp.n+=c.n;grp.tx+=c.tx;if(a.type!=="cash"&&a.type!=="savings")grp.quantity+=(a.quantity||0)});return order.map(function(k){return groups[k]})}
 function topHoldings(n){return groupedHoldings().sort(function(x,y){return y.g-x.g}).slice(0,n||3)}
 function concentration(){var t=totals().g||1,top=topHoldings(3);return{top1Pct:top.length?(top[0].g/t*100):0,top3Pct:top.reduce(function(s,grp){return s+grp.g},0)/t*100,top:top}}
