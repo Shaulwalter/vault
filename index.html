@@ -179,7 +179,9 @@ $("addSel").onchange=function(){var v=this.value;this.value="";if(v)openModal(v)
 function clearMgFilters(){S.mFType="all";S.mFLoc="all";renderManage()}
 window.clearMgFilters=clearMgFilters;
 
-function txnAmtUSD(t){var v=(t.qty||0)*(t.price||0);v+=t.side==="buy"?(t.fee||0):-(t.fee||0);if(v<0)v=0;if(t.currency&&t.currency!=="USD"&&S.xR[t.currency])v=v/S.xR[t.currency];return v}
+function txnAmtUSD(t){var v;if(t.netAmt!==undefined){v=t.netAmt}else{v=(t.qty||0)*(t.price||0);v+=t.side==="buy"?(t.fee||0):-(t.fee||0)}if(v<0)v=0;if(t.currency&&t.currency!=="USD"&&S.xR[t.currency])v=v/S.xR[t.currency];return v}
+function txnUnitVal(asset,price){return asset.type==="option"?Math.max(0,price-(asset.exercisePrice||0)):price}
+function txnTaxRate(asset){return asset.alreadyNet?0:((asset.taxPercent||0)/100)}
 function tradableAssets(){return S.P.filter(function(a){return a.type==="stock"||a.type==="crypto"||a.type==="option"})}
 function cashAssets(){return S.P.filter(function(a){return a.type==="cash"})}
 function convCur(amt,from,to){from=from||"USD";to=to||"USD";if(from===to)return amt;var usd=(from==="USD"||!S.xR[from])?amt:amt/S.xR[from];return(to==="USD"||!S.xR[to])?usd:usd*S.xR[to]}
@@ -191,7 +193,9 @@ var list=S.txns.slice().sort(function(a,b){var da=a.date||"",db=b.date||"";if(da
 if(!list.length){h+='<div class="empty"><p>No transactions logged</p><div style="font-size:12px;color:var(--tx3);max-width:340px;margin:0 auto">Log a buy or sell '+String.fromCharCode(8212)+' a sell draws from a holding you own, a buy draws from a cash account, both update automatically.</div></div>'}
 else{var totBuy=0,totSell=0;list.forEach(function(t){var a=txnAmtUSD(t);if(t.side==="buy")totBuy+=a;else totSell+=a});h+='<div class="ins"><div class="insT">'+ic('swap')+'Summary</div><div class="sRow"><div class="sI"><div class="l">Bought</div><div class="v vT">'+fmt(totBuy,true)+'</div></div><div class="sI"><div class="l">Sold</div><div class="v vG">'+fmt(totSell,true)+'</div></div><div class="sI"><div class="l">Net Flow</div><div class="v '+(totSell-totBuy>=0?"vG":"vT")+'">'+fmt(totSell-totBuy,true)+'</div></div></div></div>';
 for(var i=0;i<list.length;i++){var t=list[i],sideCol=t.side==="buy"?"var(--red)":"var(--grn)",amt=txnAmtUSD(t),fundLbl=t.side==="buy"?"From":"To",s=sy();
-h+='<div class="cd"><div class="cdR"><div><div class="cdN"><span class="cdDot" style="background:'+sideCol+'"></span>'+esc(t.symbol||"")+' <span class="bg" style="color:'+sideCol+';border-color:'+sideCol+'">'+(t.side==="buy"?"BUY":"SELL")+'</span></div><div class="cdSub">'+esc(t.date||"")+(t.loc?" "+String.fromCharCode(183)+" "+esc(t.loc):"")+'</div><div class="cdM">'+(t.qty||0)+" @ "+s+(+t.price||0).toFixed(2)+(t.fee?" "+String.fromCharCode(183)+" fee "+s+(+t.fee).toFixed(2):"")+'</div>'+(t.cashName?'<div class="cdM">'+fundLbl+": "+esc(t.cashName)+"</div>":"")+(t.notes?'<div class="cdM" style="color:var(--tx3)">'+esc(t.notes)+"</div>":"")+'</div><div class="cdV"><div class="cdG">'+fmt(amt)+'</div></div></div><div class="mAct"><button onclick="editTxn(\''+t.id+'\')">Edit</button><button class="dng" onclick="deleteTxn(\''+t.id+'\')">Delete</button></div></div>'}}
+var strikeH=t.exercisePrice!==undefined?" "+String.fromCharCode(183)+" strike "+s+(+t.exercisePrice).toFixed(2):"";
+var taxH=t.tax?'<div class="cdM">Gross '+s+(+t.gross).toFixed(2)+" "+String.fromCharCode(183)+" tax -"+s+(+t.tax).toFixed(2)+(t.taxPct?" ("+t.taxPct.toFixed(0)+"%)":"")+"</div>":"";
+h+='<div class="cd"><div class="cdR"><div><div class="cdN"><span class="cdDot" style="background:'+sideCol+'"></span>'+esc(t.symbol||"")+' <span class="bg" style="color:'+sideCol+';border-color:'+sideCol+'">'+(t.side==="buy"?"BUY":"SELL")+'</span></div><div class="cdSub">'+esc(t.date||"")+(t.loc?" "+String.fromCharCode(183)+" "+esc(t.loc):"")+'</div><div class="cdM">'+(t.qty||0)+" @ "+s+(+t.price||0).toFixed(2)+strikeH+(t.fee?" "+String.fromCharCode(183)+" fee "+s+(+t.fee).toFixed(2):"")+"</div>"+taxH+(t.cashName?'<div class="cdM">'+fundLbl+": "+esc(t.cashName)+"</div>":"")+(t.notes?'<div class="cdM" style="color:var(--tx3)">'+esc(t.notes)+"</div>":"")+'</div><div class="cdV"><div class="cdG">'+fmt(amt)+'</div></div></div><div class="mAct"><button onclick="editTxn(\''+t.id+'\')">Edit</button><button class="dng" onclick="deleteTxn(\''+t.id+'\')">Delete</button></div></div>'}}
 h+='<div class="ioS"><div class="insT">'+ic('tray')+'Export</div><div class="ioR"><button onclick="exportTxns()">Export CSV</button></div></div>';
 $("pg-txns").innerHTML=h;var ts=$("txAddSel");if(ts)ts.onchange=function(){var v=this.value;this.value="";if(v)openTxnModal(v)}}
 
@@ -220,7 +224,7 @@ if(editing&&t.newAsset&&aWrap)aWrap.style.display="none";
 if(editing&&t.newCash&&fWrap)fWrap.style.display="none";
 },100)}
 function saveTxn(){var side=S.txSide,editing=!!S.editId;var qty=parseFloat($("txQty").value)||0,price=parseFloat($("txPrice").value)||0,fee=parseFloat($("txFee").value)||0;if(!qty||!price){toast("Need qty & price");return}
-if(editing){var et=S.txns.find(function(x){return x.id===S.editId});if(!et){closeModal();return}et.date=$("txDate").value||dateStr(new Date());et.qty=qty;et.price=price;et.fee=fee;et.notes=($("txNotes").value||"").trim();closeModal();toast("Updated");save();renderAll();loadPortfolioChange();return}
+if(editing){var et=S.txns.find(function(x){return x.id===S.editId});if(!et){closeModal();return}et.date=$("txDate").value||dateStr(new Date());et.qty=qty;et.price=price;et.fee=fee;et.notes=($("txNotes").value||"").trim();var refA=S.P.find(function(x){return x.id===et.assetId});if(refA){var uV=txnUnitVal(refA,price),gr=et.side==="buy"?qty*price:uV*qty,txA=et.side==="sell"?gr*txnTaxRate(refA):0;et.gross=gr;et.tax=txA;et.taxPct=et.side==="sell"?txnTaxRate(refA)*100:0;et.netAmt=et.side==="buy"?(qty*price+fee):(gr-txA-fee);if(refA.type==="option")et.exercisePrice=refA.exercisePrice||0;else delete et.exercisePrice}closeModal();toast("Updated");save();renderAll();loadPortfolioChange();return}
 var aSel=$("txAssetSel"),fSel=$("txFundSel"),aVal=aSel?aSel.value:"",fVal=fSel?fSel.value:"";
 var asset=null,newAsset=false;
 if(side==="sell"){if(!aVal){toast("Select the asset you're selling");return}asset=S.P.find(function(x){return x.id===aVal});if(!asset){toast("Asset not found");return}}
@@ -231,14 +235,18 @@ var cashAcct=null,newCash=false;
 if(fVal==="__new__"){var cname=($("txNewCashName").value||"").trim();if(!cname){toast("Enter a name for the new cash account");return}cashAcct={id:"a"+(Date.now()+1),type:"cash",createdAt:new Date().toISOString(),name:cname,balance:parseFloat($("txNewCashBal")?$("txNewCashBal").value:0)||0,currency:$("txNewCashCur").value||"USD",location:$("txNewCashLoc").value||""};S.P.push(cashAcct);newCash=true}
 else if(fVal){cashAcct=S.P.find(function(x){return x.id===fVal});if(!cashAcct){toast("Cash account not found");return}}
 else{toast(side==="buy"?"Select a funding cash account":"Select a destination cash account");return}
-var curr=asset.currency||"USD",gross=qty*price,net=side==="buy"?gross+fee:gross-fee;
+var curr=asset.currency||"USD",unitVal=txnUnitVal(asset,price),taxRate=txnTaxRate(asset);
+var gross=side==="buy"?qty*price:unitVal*qty;
+var taxAmt=side==="sell"?gross*taxRate:0;
+var net=side==="buy"?(gross+fee):(gross-taxAmt-fee);
 if(side==="sell"){if(qty>(asset.quantity||0))toast("Note: selling more than currently held ("+(asset.quantity||0)+")");asset.quantity=(parseFloat(asset.quantity)||0)-qty;cashAcct.balance=(parseFloat(cashAcct.balance)||0)+convCur(net,curr,cashAcct.currency||"USD")}
 else{asset.quantity=(parseFloat(asset.quantity)||0)+qty;cashAcct.balance=(parseFloat(cashAcct.balance)||0)-convCur(net,curr,cashAcct.currency||"USD")}
-var nt={id:"t"+Date.now(),createdAt:new Date().toISOString(),side:side,date:$("txDate").value||dateStr(new Date()),assetId:asset.id,symbol:asset.symbol,newAsset:newAsset,qty:qty,price:price,fee:fee,currency:curr,loc:asset.location||"",cashId:cashAcct.id,cashName:cashAcct.name||"",newCash:newCash,notes:($("txNotes").value||"").trim()};
+var nt={id:"t"+Date.now(),createdAt:new Date().toISOString(),side:side,date:$("txDate").value||dateStr(new Date()),assetId:asset.id,symbol:asset.symbol,newAsset:newAsset,qty:qty,price:price,fee:fee,gross:gross,tax:taxAmt,taxPct:side==="sell"?taxRate*100:0,netAmt:net,currency:curr,loc:asset.location||"",cashId:cashAcct.id,cashName:cashAcct.name||"",newCash:newCash,notes:($("txNotes").value||"").trim()};
+if(asset.type==="option")nt.exercisePrice=asset.exercisePrice||0;
 S.txns.push(nt);closeModal();toast("Logged");save();renderAll();loadPortfolioChange()}
 function editTxn(id){var t=S.txns.find(function(x){return x.id===id});if(t)openTxnModal(t.side,t)}
 function deleteTxn(id){if(!confirm("Remove this transaction? (Holdings and cash balances already adjusted by it won't be reverted.)"))return;S.txns=S.txns.filter(function(x){return x.id!==id});save();renderAll();toast("Removed")}
-function exportTxns(){var rows=[["Date","Side","Symbol","Qty","Price","Fee","Currency","Asset Location","Cash Account","Notes"]];S.txns.slice().sort(function(a,b){return (a.date||"")<(b.date||"")?-1:1}).forEach(function(t){rows.push([t.date||"",t.side||"",t.symbol||"",t.qty||0,t.price||0,t.fee||0,t.currency||"USD",t.loc||"",t.cashName||"",t.notes||""])});dlCsv(rows,"vault-transactions","transactions")}
+function exportTxns(){var rows=[["Date","Side","Symbol","Qty","Price","Strike","Fee","Gross","Tax","Tax %","Net","Currency","Asset Location","Cash Account","Notes"]];S.txns.slice().sort(function(a,b){return (a.date||"")<(b.date||"")?-1:1}).forEach(function(t){rows.push([t.date||"",t.side||"",t.symbol||"",t.qty||0,t.price||0,t.exercisePrice!==undefined?t.exercisePrice:"",t.fee||0,t.gross!==undefined?t.gross:"",t.tax||0,t.taxPct?t.taxPct.toFixed(2):"",t.netAmt!==undefined?t.netAmt:"",t.currency||"USD",t.loc||"",t.cashName||"",t.notes||""])});dlCsv(rows,"vault-transactions","transactions")}
 window.openTxnModal=openTxnModal;window.saveTxn=saveTxn;window.editTxn=editTxn;window.deleteTxn=deleteTxn;window.exportTxns=exportTxns;
 
 function renderSettings(){var byTk={};S.P.forEach(function(a){if(a.symbol)byTk[a.symbol.toUpperCase()]=true});var tks=Object.keys(byTk).sort();var locH=S.cLocs.length?'<div style="margin-top:8px;font-size:12px;color:var(--tx3)">Custom: '+S.cLocs.map(function(l,i){return esc(l)+' <a style="color:var(--red);cursor:pointer;font-size:10px" onclick="rmLoc('+i+')">x</a>'}).join(" "+String.fromCharCode(183)+" ")+"</div>":"";
